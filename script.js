@@ -5,10 +5,10 @@
     tileSize: 14,
     flipDurationMs: 920,
     waveDurationMs: 4200,
-    refreshIntervalMs: 30000,
+    refreshIntervalMs: 10000,
     liftPx: 3.2,
     depthPx: 2.4,
-    maxDpr: 1.25,
+    maxDpr: 2.0,
     background: "#071a36"
   };
 
@@ -64,6 +64,9 @@
   let maskImageReady = false;
   let proceduralTreeMeta = null;
   let rafId = 0;
+  let centerCopyThemeTimer = null;
+  let centerCopyThemeRafId = 0;
+  let centerCopyThemeIndex = 0;
 
   function clampChannel(v) {
     return Math.max(0, Math.min(255, Math.round(v)));
@@ -79,6 +82,159 @@
 
   function cssColor(rgb) {
     return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+  }
+
+  function easeInOut(t) {
+    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  }
+
+  function mixChannel(a, b, t) {
+    return Math.round(a + (b - a) * t);
+  }
+
+  function mixRgb(a, b, t) {
+    return [
+      mixChannel(a[0], b[0], t),
+      mixChannel(a[1], b[1], t),
+      mixChannel(a[2], b[2], t)
+    ];
+  }
+
+  function centerTitleColorForScheme(index) {
+    const palette = PALETTES[index % PALETTES.length];
+    const treeLum = luminance(palette.tree);
+    const bgLum = luminance(palette.bg);
+    return treeLum < bgLum ? [10, 30, 66] : [241, 247, 255];
+  }
+
+  function centerTitleGlowForScheme(index) {
+    const palette = PALETTES[index % PALETTES.length];
+    const treeLum = luminance(palette.tree);
+    const bgLum = luminance(palette.bg);
+    return treeLum < bgLum
+      ? "0 1px 0 rgba(255,255,255,0.28)"
+      : "0 1px 0 rgba(0,0,0,0.35)";
+  }
+
+  function getCenterCopyHeading() {
+    const wrap = document.querySelector(".center-copy");
+    if (!wrap) return null;
+    return wrap.querySelector("h2") || wrap.querySelector("h1");
+  }
+
+  function ensureCenterCopyGlyphSpans() {
+    const heading = getCenterCopyHeading();
+    if (!heading) return null;
+
+    const existing = heading.querySelectorAll("span[data-glyph]");
+    if (existing.length) return Array.from(existing);
+
+    const text = heading.textContent || "";
+    const frag = document.createDocumentFragment();
+    for (const ch of text) {
+      const span = document.createElement("span");
+      span.setAttribute("data-glyph", "1");
+      span.style.display = "inline-block";
+      span.textContent = ch === " " ? "\u00a0" : ch;
+      frag.appendChild(span);
+    }
+    heading.textContent = "";
+    heading.appendChild(frag);
+    return Array.from(heading.querySelectorAll("span[data-glyph]"));
+  }
+
+  function setCenterCopyThemeForScheme(index) {
+    const wrap = document.querySelector(".center-copy");
+    if (!wrap) return;
+
+    if (centerCopyThemeRafId) {
+      cancelAnimationFrame(centerCopyThemeRafId);
+      centerCopyThemeRafId = 0;
+    }
+    if (centerCopyThemeTimer) {
+      clearTimeout(centerCopyThemeTimer);
+      centerCopyThemeTimer = null;
+    }
+
+    const heading = getCenterCopyHeading();
+    if (!heading) return;
+
+    const rgb = centerTitleColorForScheme(index);
+    const glow = centerTitleGlowForScheme(index);
+    const color = cssColor(rgb);
+    const spans = ensureCenterCopyGlyphSpans();
+
+    wrap.style.color = color;
+    wrap.style.textShadow = glow;
+    heading.style.color = color;
+    heading.style.textShadow = glow;
+    if (spans) {
+      spans.forEach((s) => {
+        s.style.color = color;
+      });
+    }
+    centerCopyThemeIndex = index % PALETTES.length;
+  }
+
+  function animateCenterCopyThemeWave(index) {
+    const wrap = document.querySelector(".center-copy");
+    const heading = getCenterCopyHeading();
+    if (!wrap || !heading) return;
+
+    const spans = ensureCenterCopyGlyphSpans();
+    if (!spans || spans.length === 0) {
+      setCenterCopyThemeForScheme(index);
+      return;
+    }
+
+    if (centerCopyThemeRafId) {
+      cancelAnimationFrame(centerCopyThemeRafId);
+      centerCopyThemeRafId = 0;
+    }
+
+    const from = centerTitleColorForScheme(centerCopyThemeIndex);
+    const to = centerTitleColorForScheme(index);
+    const glow = centerTitleGlowForScheme(index);
+    const totalDuration = Math.max(900, CONFIG.waveDurationMs * 0.9);
+    const perGlyphDuration = totalDuration * 0.42;
+    const stagger = spans.length > 1 ? (totalDuration - perGlyphDuration) / (spans.length - 1) : 0;
+    const start = performance.now();
+
+    wrap.style.textShadow = glow;
+    heading.style.textShadow = glow;
+
+    function frame(now) {
+      const elapsed = now - start;
+      let done = true;
+
+      for (let i = 0; i < spans.length; i++) {
+        const raw = (elapsed - i * stagger) / perGlyphDuration;
+        const t = Math.max(0, Math.min(1, raw));
+        if (t < 1) done = false;
+        spans[i].style.color = cssColor(mixRgb(from, to, easeInOut(t)));
+      }
+
+      if (!done) {
+        centerCopyThemeRafId = requestAnimationFrame(frame);
+        return;
+      }
+
+      const endColor = cssColor(to);
+      wrap.style.color = endColor;
+      heading.style.color = endColor;
+      centerCopyThemeRafId = 0;
+      centerCopyThemeIndex = index % PALETTES.length;
+    }
+
+    centerCopyThemeRafId = requestAnimationFrame(frame);
+  }
+
+  function queueCenterCopyThemeWave(index) {
+    if (centerCopyThemeTimer) clearTimeout(centerCopyThemeTimer);
+    centerCopyThemeTimer = setTimeout(() => {
+      animateCenterCopyThemeWave(index);
+      centerCopyThemeTimer = null;
+    }, 120);
   }
 
   function normalizeHash(hash = "") {
@@ -690,6 +846,7 @@
     if (!hashStream) return;
 
     schemeIndex = (schemeIndex + 1) % PALETTES.length;
+    queueCenterCopyThemeWave(schemeIndex);
 
     const now = performance.now() + 100;
     const maxWaveIndex = Math.max(1, rows + cols - 2);
@@ -835,6 +992,7 @@
   });
 
   tryLoadTreeMaskImage();
+  setCenterCopyThemeForScheme(schemeIndex);
   resize();
   startAnimation();
   refreshHashesAndFlip();

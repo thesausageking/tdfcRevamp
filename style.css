@@ -1,9 +1,11 @@
 :root {
   --bg: #081a34;
-  --ink: #ecf3ff;
-  --bar: rgba(8, 26, 52, 0.58);
-  --stroke: rgba(211, 226, 255, 0.22);
+  --ink: #1d2a40;
+  --bar: #e2eaf6; /* solid header/footer */
+  --stroke: #889ab8;
+  --strip-h: 84px; /* bigger footer/header */
 }
+
 
 * {
   box-sizing: border-box;
@@ -18,7 +20,8 @@ body {
 }
 
 body {
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: "Cormorant Garamond", serif;
+;
   color: var(--ink);
   background: var(--bg);
   overflow: hidden;
@@ -51,126 +54,141 @@ body {
   width: 100%;
   min-height: 100vh;
   display: grid;
-  grid-template-rows: auto 1fr auto;
-  padding: 0;
+  grid-template-rows: var(--strip-h) 1fr var(--strip-h);
 }
 
-.left-panel,
-.right-panel {
-  display: contents;
-}
-
-.brand-lockup {
-  grid-row: 1;
+.top-strip,
+.bottom-strip {
+  width: 100%;
+  height: var(--strip-h);
   display: flex;
   align-items: center;
-  gap: 14px;
-  min-height: 64px;
-  padding: 10px 22px;
   background: var(--bar);
-  border-bottom: 1px solid var(--stroke);
-  backdrop-filter: blur(2px);
 }
 
-.logo {
-  width: 40px;
-  height: 40px;
-  object-fit: contain;
-  border-radius: 2px;
-  border: 1px solid var(--stroke);
-  background: rgba(236, 245, 255, 0.18);
+.top-strip {
+  justify-content: flex-start;
+  padding: 0 22px;
+  border-bottom: 1px solid var(--stroke);
+}
+
+.bottom-strip {
+  justify-content: space-between;
+  padding: 0 22px;
+  border-top: 1px solid var(--stroke);
+}
+
+h1,
+h2,
+.label,
+.contact-link,
+.established {
+  font-family: inherit;
+  color: inherit;
 }
 
 h1 {
   margin: 0;
-  font-family: "Instrument Serif", Georgia, serif;
-  font-size: clamp(1.25rem, 2.3vw, 2rem);
-  font-weight: 400;
-  line-height: 1;
+  font-size: clamp(1.15rem, 2.3vw, 3rem);
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
-.meta:first-of-type {
-  grid-row: 2;
-  align-self: end;
-  justify-self: end;
-  margin: 0 28px 28px 0;
-  text-align: right;
-}
-
-.meta:last-of-type {
-  grid-row: 2;
-  align-self: center;
-  justify-self: center;
+.center-copy {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  /* place title roughly halfway between tree top and footer */
+  padding-top: clamp(74px, 10.5vh, 118px);
+  z-index: 3;
   text-align: center;
+  transition: color 260ms ease, text-shadow 260ms ease;
 }
+
+/* Main center title */
+.center-copy h2 {
+  margin: 0;
+  font-size: clamp(2rem, 6vw, 5rem);
+  font-weight: 600;
+  line-height: 0.95;
+  letter-spacing: 0.01em;
+  transform: translateY(-1.05em);
+  color: inherit;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: color 260ms ease, text-shadow 260ms ease;
+}
+
 
 .label {
-  margin: 0 0 8px;
-  font-family: "Instrument Serif", Georgia, serif;
-  font-style: italic;
-  font-size: clamp(1.2rem, 2vw, 2rem);
-  opacity: 0.88;
+  display: none; /* remove "we make" */
 }
 
 h2 {
   margin: 0;
-  font-size: clamp(1.25rem, 3.1vw, 3rem);
-  font-weight: 300;
-  letter-spacing: 0.01em;
+  font-size: clamp(2.1rem, 4.2vw, 4.4rem); /* a bit smaller */
+  line-height: 1;
+  font-weight: 600;
 }
+
 
 .contact-link {
-  grid-row: 3;
-  justify-self: start;
-  align-self: end;
-  margin: 0 0 16px 22px;
-  color: var(--ink);
   text-decoration: none;
-  font-size: 1rem;
-  padding: 8px 12px;
-  border: 1px solid var(--stroke);
-  border-radius: 999px;
-  background: var(--bar);
+  font-size: 1.05rem;          /* smaller contact box text */
+  line-height: 1;
+  border: 1px solid rgba(29, 42, 64, 0.52);
+  border-radius: 10px;
+  padding: 6px 12px;           /* smaller button */
+  background: rgba(241, 246, 255, 0.36);
 }
 
-.contact-link:hover {
-  background: rgba(192, 214, 255, 0.2);
+
+.established {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
 }
 
-.right-panel::after {
-  content: "established 2025 New York";
-  grid-row: 3;
-  justify-self: end;
-  align-self: end;
-  margin: 0 22px 18px 0;
-  font-size: 0.96rem;
-  letter-spacing: 0.02em;
-  opacity: 0.85;
+.established span {
+  font-size: 1.15rem;          /* smaller so it never overflows */
+  font-style: italic;
+  opacity: 0.72;
 }
+
+.established strong {
+  font-size: 1.95rem;          /* smaller footer headline */
+  font-weight: 500;
+  letter-spacing: 0.005em;
+}
+
 
 @media (max-width: 900px) {
-  .brand-lockup {
-    min-height: 56px;
-    padding: 8px 14px;
-    gap: 10px;
+  :root {
+    --strip-h: 66px;
   }
 
-  .logo {
-    width: 32px;
-    height: 32px;
+  h2 {
+    font-size: clamp(1.6rem, 7vw, 2.5rem);
   }
 
-  .meta:first-of-type {
-    margin: 0 14px 14px 0;
+  .center-copy h2 {
+    transform: translateY(-0.85em);
   }
 
-  .right-panel::after {
-    margin: 0 14px 12px 0;
-    font-size: 0.85rem;
+  .center-copy {
+    padding-top: clamp(56px, 8.6vh, 94px);
   }
 
   .contact-link {
-    margin: 0 0 10px 12px;
+    font-size: 0.95rem;
+    padding: 5px 10px;
+  }
+
+  .established span {
     font-size: 0.9rem;
+  }
+
+  .established strong {
+    font-size: 1.35rem;
   }
 }
