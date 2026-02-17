@@ -1,8 +1,8 @@
 :root {
-  --bg: #d5d9de;
-  --ink: #1a1c1f;
-  --bar: rgba(248, 249, 251, 0.58);
-  --stroke: rgba(0, 0, 0, 0.08);
+  --bg: #081a34;
+  --ink: #ecf3ff;
+  --bar: rgba(8, 26, 52, 0.58);
+  --stroke: rgba(211, 226, 255, 0.22);
 }
 
 * {
@@ -40,9 +40,9 @@ body {
   z-index: 1;
   pointer-events: none;
   background:
-    radial-gradient(120% 80% at 10% 5%, rgba(255, 255, 255, 0.20), transparent 60%),
-    radial-gradient(110% 75% at 85% 100%, rgba(255, 255, 255, 0.12), transparent 62%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.05));
+    radial-gradient(120% 80% at 10% 5%, rgba(238, 245, 255, 0.16), transparent 60%),
+    radial-gradient(110% 75% at 85% 100%, rgba(142, 176, 235, 0.12), transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(3, 10, 24, 0.16));
 }
 
 .content-layer {
@@ -78,7 +78,7 @@ body {
   object-fit: contain;
   border-radius: 2px;
   border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.35);
+  background: rgba(236, 245, 255, 0.18);
 }
 
 h1 {
@@ -134,7 +134,7 @@ h2 {
 }
 
 .contact-link:hover {
-  background: rgba(255, 255, 255, 0.75);
+  background: rgba(192, 214, 255, 0.2);
 }
 
 .right-panel::after {

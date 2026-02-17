@@ -9,14 +9,20 @@
     liftPx: 3.2,
     depthPx: 2.4,
     maxDpr: 1.25,
-    background: "#d7dadf"
+    background: "#071a36"
+  };
+
+  // Reference viewport for composition (from inspect-open look).
+  const TREE_REFERENCE_VIEWPORT = {
+    widthPx: 1047,
+    heightPx: 992
   };
 
   const PALETTES = [
-    // A: dark tree on light field
-    { tree: 92, bg: 220 },
-    // B: light tree on dark field
-    { tree: 206, bg: 108 }
+    // A: white tree on midnight-blue field
+    { tree: [241, 247, 255], bg: [13, 34, 72] },
+    // B: midnight-blue tree on white field
+    { tree: [10, 30, 66], bg: [234, 243, 255] }
   ];
 
   const HEX_ONLY = /^[0-9a-f]{64}$/;
@@ -58,6 +64,22 @@
   let maskImageReady = false;
   let proceduralTreeMeta = null;
   let rafId = 0;
+
+  function clampChannel(v) {
+    return Math.max(0, Math.min(255, Math.round(v)));
+  }
+
+  function tintColor(rgb, delta) {
+    return [clampChannel(rgb[0] + delta), clampChannel(rgb[1] + delta), clampChannel(rgb[2] + delta)];
+  }
+
+  function luminance(rgb) {
+    return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+  }
+
+  function cssColor(rgb) {
+    return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+  }
 
   function normalizeHash(hash = "") {
     const lower = String(hash).toLowerCase();
@@ -197,17 +219,17 @@
     mctx.lineJoin = "round";
 
     // Solid trunk with stronger flare at the base.
-    const trunkTopY = baseY - canopyH * 0.32;
+    const trunkTopY = baseY - canopyH * 0.39;
     const trunkBottomY = baseY;
     const trunkTopW = canopyW * 0.034;
-    const trunkBottomW = canopyW * 0.13;
+    const trunkBottomW = canopyW * 0.118;
     proceduralTreeMeta = { cx, trunkTopY, trunkBottomY, trunkTopW, trunkBottomW };
 
     mctx.fillStyle = "rgba(0,0,0,1)";
     mctx.beginPath();
-    mctx.moveTo(cx - trunkBottomW * 0.58, trunkBottomY);
+    mctx.moveTo(cx - trunkBottomW * 0.5, trunkBottomY);
     mctx.bezierCurveTo(
-      cx - trunkBottomW * 0.5,
+      cx - trunkBottomW * 0.45,
       baseY - canopyH * 0.06,
       cx - trunkTopW * 0.95,
       trunkTopY + canopyH * 0.12,
@@ -229,9 +251,9 @@
     mctx.bezierCurveTo(
       cx + trunkTopW * 0.95,
       trunkTopY + canopyH * 0.12,
-      cx + trunkBottomW * 0.5,
+      cx + trunkBottomW * 0.45,
       baseY - canopyH * 0.06,
-      cx + trunkBottomW * 0.58,
+      cx + trunkBottomW * 0.5,
       trunkBottomY
     );
     mctx.closePath();
@@ -244,10 +266,10 @@
       return seed / 4294967296;
     }
 
-    // Gentle semicircle guide for outer branch tips.
-    const edgeArcCy = baseY - canopyH * 0.45;
-    const edgeArcRx = canopyW * 0.74;
-    const edgeArcRy = canopyH * 0.48;
+    // Semicircle guide for canopy tip targets.
+    const edgeArcCy = baseY - canopyH * 0.58;
+    const edgeArcRx = canopyW * 0.75;
+    const edgeArcRy = canopyH * 0.56;
     function edgeArcY(xp) {
       const dx = (xp - cx) / edgeArcRx;
       const t = Math.max(0, 1 - dx * dx);
@@ -257,14 +279,23 @@
     function branch(x, y, len, angle, width, depth, bias) {
       if (depth <= 0 || len < 0.82 || width < 0.07) return;
 
-      const heading = angle + (rand() - 0.5) * 0.36 + bias * 0.07;
+      const sideUniform = Math.abs(bias) === 1;
+      const headingJitter = sideUniform ? 0.14 : 0.36;
+      const heading = angle + (rand() - 0.5) * headingJitter + bias * 0.07;
       let x2 = x + Math.cos(heading) * len;
       let y2 = y + Math.sin(heading) * len;
+      const xAbs = Math.abs(x2 - cx);
 
-      // Only outer tips are gently pulled to a semicircle.
-      if (Math.abs(bias) === 1 && depth <= 2) {
-        const semiY = edgeArcY(x2) + (depth === 1 ? 0.22 : 0.4);
-        const pull = depth === 1 ? 0.62 : 0.45;
+      // Pull upper branches toward one shared canopy arc.
+      if (depth <= 2) {
+        const semiY = edgeArcY(x2) + (depth === 1 ? 0.1 : 0.24);
+        const pull = depth === 1 ? 0.95 : 0.88;
+        y2 = y2 * (1 - pull) + semiY * pull;
+        const minTop = edgeArcY(x2) - 0.2;
+        if (y2 < minTop) y2 = minTop;
+      } else if (depth === 3 && xAbs > canopyW * 0.18) {
+        const semiY = edgeArcY(x2) + 0.36;
+        const pull = xAbs > canopyW * 0.45 ? 0.76 : 0.62;
         y2 = y2 * (1 - pull) + semiY * pull;
       }
 
@@ -272,8 +303,8 @@
       const normal = segAngle + Math.PI / 2;
       const curveDirBase = bias === 0 ? (rand() < 0.5 ? -1 : 1) : bias;
       const curveDir = curveDirBase * (bias !== 0 && depth % 2 === 1 ? -0.55 : 1);
-      const curve1 = len * (0.16 + rand() * 0.2) * curveDir;
-      const curve2 = len * (0.12 + rand() * 0.22) * curveDir;
+      const curve1 = len * (sideUniform ? 0.2 : 0.16 + rand() * 0.2) * curveDir;
+      const curve2 = len * (sideUniform ? 0.17 : 0.12 + rand() * 0.22) * curveDir;
       const c1x = x + Math.cos(segAngle) * len * 0.33 + Math.cos(normal) * curve1;
       const c1y = y + Math.sin(segAngle) * len * 0.33 + Math.sin(normal) * curve1;
       const c2x = x + Math.cos(segAngle) * len * 0.72 + Math.cos(normal) * curve2;
@@ -291,15 +322,28 @@
         return;
       }
 
-      const nextLen = len * (0.69 + rand() * 0.06);
-      const nextWidth = width * (0.48 + rand() * 0.07);
-      const spread = 0.2 + rand() * 0.24;
+      // Thin out lower outer-lobe density.
+      if (xAbs > canopyW * 0.42 && y2 > baseY - canopyH * 0.42 && rand() < 0.22) {
+        return;
+      }
+
+      // Red-zone thinning: upper center cluster and left-mid cluster.
+      if (xAbs < canopyW * 0.18 && y2 < baseY - canopyH * 0.52 && y2 > baseY - canopyH * 0.82 && rand() < 0.34) {
+        return;
+      }
+      if (bias < 0 && xAbs > canopyW * 0.18 && xAbs < canopyW * 0.44 && y2 > baseY - canopyH * 0.72 && y2 < baseY - canopyH * 0.26 && rand() < 0.36) {
+        return;
+      }
+
+      const nextLen = len * (sideUniform ? 0.72 : 0.69 + rand() * 0.06);
+      const nextWidth = width * (sideUniform ? 0.54 : 0.48 + rand() * 0.07);
+      const spread = sideUniform ? 0.24 - Math.min(0.06, (9 - depth) * 0.008) : 0.2 + rand() * 0.24;
 
       // Keep the main split in two, then add selective middle twigs to fill center canopy.
       branch(x2, y2, nextLen, segAngle - spread, nextWidth, depth - 1, -1);
       branch(x2, y2, nextLen * (0.94 + rand() * 0.1), segAngle + spread, nextWidth, depth - 1, 1);
 
-      const centerTwigChance = bias === 0 ? 0.72 : 0.44;
+      const centerTwigChance = bias === 0 ? 0.82 : 0.34;
       if (depth >= 3 && depth <= 7 && rand() < centerTwigChance) {
         branch(
           x2,
@@ -312,7 +356,7 @@
         );
       }
 
-      if (bias === 0 && depth <= 5 && depth >= 2 && rand() < 0.58) {
+      if (bias === 0 && depth <= 6 && depth >= 2 && rand() < 0.68) {
         branch(
           x2,
           y2,
@@ -323,6 +367,119 @@
           rand() < 0.5 ? -1 : 1
         );
       }
+
+      // Add more center-column twig/trunk feeders (green zones).
+      if (xAbs < canopyW * 0.24 && depth >= 3 && depth <= 8 && rand() < 0.74) {
+        branch(
+          x2,
+          y2,
+          nextLen * (0.54 + rand() * 0.1),
+          segAngle + (rand() - 0.5) * 0.08,
+          nextWidth * 0.72,
+          depth - 1,
+          0
+        );
+      }
+
+      // Extra upper-center fillers (green top-center pocket).
+      if (xAbs < canopyW * 0.22 && y2 < baseY - canopyH * 0.54 && depth >= 2 && depth <= 6 && rand() < 0.68) {
+        branch(
+          x2,
+          y2,
+          nextLen * (0.5 + rand() * 0.08),
+          segAngle + (rand() - 0.5) * 0.07,
+          nextWidth * 0.62,
+          depth - 1,
+          0
+        );
+      }
+
+      // Extra top-side twig feeders (silhouette band).
+      if (xAbs > canopyW * 0.38 && xAbs < canopyW * 0.74 && y2 < baseY - canopyH * 0.56 && depth >= 2 && depth <= 6 && rand() < 0.95) {
+        branch(
+          x2,
+          y2,
+          nextLen * (0.46 + rand() * 0.08),
+          segAngle + (bias > 0 ? -0.11 : 0.11) + (rand() - 0.5) * 0.08,
+          nextWidth * 0.52,
+          depth - 1,
+          bias > 0 ? 1 : -1
+        );
+      }
+
+      // Center-top wisps (small twigs near top-middle).
+      if (
+        xAbs < canopyW * 0.12 &&
+        y2 < baseY - canopyH * 0.62 &&
+        y2 > baseY - canopyH * 0.9 &&
+        depth >= 2 &&
+        depth <= 5 &&
+        rand() < 0.62
+      ) {
+        branch(
+          x2,
+          y2,
+          nextLen * (0.42 + rand() * 0.08),
+          segAngle + (rand() - 0.5) * 0.06,
+          nextWidth * 0.48,
+          depth - 1,
+          0
+        );
+      }
+
+      // Center-mid connectors (adds branch structure without filling solid).
+      if (
+        xAbs < canopyW * 0.18 &&
+        y2 < baseY - canopyH * 0.42 &&
+        y2 > baseY - canopyH * 0.7 &&
+        depth >= 3 &&
+        depth <= 7 &&
+        rand() < 0.55
+      ) {
+        branch(
+          x2,
+          y2,
+          nextLen * (0.5 + rand() * 0.08),
+          segAngle + (rand() - 0.5) * 0.1,
+          nextWidth * 0.62,
+          depth - 1,
+          rand() < 0.5 ? -1 : 1
+        );
+      }
+
+      // Extra lower-side fillers (green bottom-left/bottom-right pockets).
+      if (
+        xAbs > canopyW * 0.28 &&
+        xAbs < canopyW * 0.64 &&
+        y2 > baseY - canopyH * 0.58 &&
+        y2 < baseY - canopyH * 0.18 &&
+        depth >= 2 &&
+        depth <= 6 &&
+        rand() < 0.68
+      ) {
+        branch(
+          x2,
+          y2,
+          nextLen * (0.5 + rand() * 0.08),
+          segAngle + (bias > 0 ? 0.08 : -0.08) + (rand() - 0.5) * 0.08,
+          nextWidth * 0.6,
+          depth - 1,
+          bias === 0 ? (rand() < 0.5 ? -1 : 1) : bias
+        );
+      }
+
+      // Stronger central vertical trunk/twig feeder (green circled middle strip).
+      if (xAbs < canopyW * 0.17 && depth >= 3 && depth <= 9 && rand() < 0.78) {
+        branch(
+          x2,
+          y2,
+          nextLen * (0.62 + rand() * 0.08),
+          segAngle + (rand() - 0.5) * 0.05,
+          nextWidth * 0.82,
+          depth - 1,
+          0
+        );
+      }
     }
 
     // Build from right-side seeds and mirror exactly to the left.
@@ -330,9 +487,9 @@
       x: cx,
       y: trunkTopY + 1.3,
       a: -Math.PI / 2,
-      l: canopyW * 0.27,
+      l: canopyW * 0.3,
       w: canopyW * 0.0138,
-      d: 8,
+      d: 9,
       b: 0
     };
 
@@ -365,6 +522,49 @@
     });
   }
 
+  function drawProceduralTreeMaskWithReferenceFrame(targetCtx, targetW, targetH) {
+    // Match inspect-open composition by drawing inside a reference aspect frame.
+    const refAspect = TREE_REFERENCE_VIEWPORT.widthPx / TREE_REFERENCE_VIEWPORT.heightPx;
+    let frameW = targetW;
+    let frameH = Math.round(frameW / refAspect);
+    if (frameH > targetH) {
+      frameH = targetH;
+      frameW = Math.round(frameH * refAspect);
+    }
+    frameW = Math.max(1, frameW);
+    frameH = Math.max(1, frameH);
+
+    const frameCanvas = document.createElement("canvas");
+    frameCanvas.width = frameW;
+    frameCanvas.height = frameH;
+    const fctx = frameCanvas.getContext("2d", { willReadFrequently: true });
+    if (!fctx) {
+      proceduralTreeMeta = null;
+      return;
+    }
+
+    drawProceduralTreeMask(fctx, frameW, frameH);
+    const frameMeta = proceduralTreeMeta ? { ...proceduralTreeMeta } : null;
+
+    const dx = Math.floor((targetW - frameW) * 0.5);
+    const dy = targetH - frameH;
+
+    targetCtx.clearRect(0, 0, targetW, targetH);
+    targetCtx.drawImage(frameCanvas, dx, dy);
+
+    if (frameMeta) {
+      proceduralTreeMeta = {
+        cx: dx + frameMeta.cx,
+        trunkTopY: dy + frameMeta.trunkTopY,
+        trunkBottomY: dy + frameMeta.trunkBottomY,
+        trunkTopW: frameMeta.trunkTopW,
+        trunkBottomW: frameMeta.trunkBottomW
+      };
+    } else {
+      proceduralTreeMeta = null;
+    }
+  }
+
   function rebuildTreeMask() {
     const count = cols * rows;
     treeMask = new Array(count).fill(false);
@@ -392,10 +592,10 @@
         mctx.clearRect(0, 0, cols, rows);
         mctx.drawImage(maskImage, dx, dy, dw, dh);
       } else {
-        drawProceduralTreeMask(mctx, cols, rows);
+        drawProceduralTreeMaskWithReferenceFrame(mctx, cols, rows);
       }
     } else {
-      drawProceduralTreeMask(mctx, cols, rows);
+      drawProceduralTreeMaskWithReferenceFrame(mctx, cols, rows);
     }
 
     const data = mctx.getImageData(0, 0, cols, rows).data;
@@ -416,9 +616,9 @@
         if (y < trunkTopY - 2 || y > trunkBottomY + 1) continue;
         const t = (y - trunkTopY) / Math.max(1, trunkBottomY - trunkTopY);
         const clamped = Math.max(0, Math.min(1, t));
-        let halfW = trunkTopW * 0.6 + (trunkBottomW * 0.62 - trunkTopW * 0.6) * Math.pow(clamped, 1.45) + 0.7;
+        let halfW = trunkTopW * 0.6 + (trunkBottomW * 0.55 - trunkTopW * 0.6) * Math.pow(clamped, 1.45) + 0.7;
         if (clamped > 0.72) {
-          halfW += (clamped - 0.72) * 6.5;
+          halfW += (clamped - 0.72) * 4.2;
         }
         for (let x = 0; x < cols; x++) {
           if (Math.abs(x - cx) <= halfW) {
@@ -540,19 +740,20 @@
     const palette = PALETTES[paletteIndex];
     const targetBase = tile.inTree ? palette.tree : palette.bg;
     const wavePulse = active ? Math.sin(p * Math.PI) * 7 : 0;
-    const edgeShift = tile.isTreeEdge && !tile.isTrunk ? (palette.tree < palette.bg ? -6 : 6) : 0;
-    let base;
+    const treeDarker = luminance(palette.tree) < luminance(palette.bg);
+    const edgeShift = tile.isTreeEdge && !tile.isTrunk ? (treeDarker ? -6 : 6) : 0;
+    let baseColor;
     if (tile.isTrunk) {
       // Solid stump/trunk color with no per-tile noise.
-      base = palette.tree;
+      baseColor = palette.tree;
     } else {
-      base = targetBase + edgeShift + wavePulse + (tile.toneSeed - 0.5) * 4;
+      baseColor = tintColor(targetBase, edgeShift + wavePulse + (tile.toneSeed - 0.5) * 4);
     }
-    base = Math.max(42, Math.min(240, Math.round(base)));
+    const baseLum = luminance(baseColor);
 
     const fy = y - lift;
 
-    ctx.fillStyle = `rgb(${base}, ${base}, ${base})`;
+    ctx.fillStyle = cssColor(baseColor);
     ctx.fillRect(x, fy, CONFIG.tileSize, CONFIG.tileSize);
 
     ctx.fillStyle = "rgba(255,255,255,0.24)";
@@ -570,7 +771,7 @@
     }
 
     if (glyph !== " ") {
-      const textInk = base > 150 ? "rgba(22,22,22,0.9)" : "rgba(248,248,248,0.88)";
+      const textInk = baseLum > 145 ? "rgba(9, 24, 50, 0.92)" : "rgba(242, 248, 255, 0.9)";
       ctx.save();
       ctx.translate(x + CONFIG.tileSize / 2, fy + CONFIG.tileSize / 2);
       ctx.scale(1, squashY);
