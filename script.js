@@ -202,51 +202,63 @@
       return seed / 4294967296;
     }
 
-    // Thin trunk and no heavy base fill.
-    const trunkTopY = baseY - canopyH * 0.3;
+    // Solid trunk with stronger flare at the base.
+    const trunkTopY = baseY - canopyH * 0.34;
     const trunkBottomY = baseY;
-    const trunkTopW = canopyW * 0.04;
-    const trunkBottomW = canopyW * 0.055;
+    const trunkTopW = canopyW * 0.034;
+    const trunkBottomW = canopyW * 0.13;
     proceduralTreeMeta = { cx, trunkTopY, trunkBottomY, trunkTopW, trunkBottomW };
 
-    mctx.lineWidth = Math.max(1.4, canopyW * 0.011);
+    mctx.fillStyle = "rgba(0,0,0,1)";
     mctx.beginPath();
-    mctx.moveTo(cx - trunkBottomW * 0.5, trunkBottomY);
+    mctx.moveTo(cx - trunkBottomW * 0.58, trunkBottomY);
     mctx.bezierCurveTo(
-      cx - trunkBottomW * 0.42,
-      baseY - canopyH * 0.1,
-      cx - trunkTopW * 0.7,
-      trunkTopY + canopyH * 0.07,
-      cx - trunkTopW * 0.35,
+      cx - trunkBottomW * 0.5,
+      baseY - canopyH * 0.06,
+      cx - trunkTopW * 0.95,
+      trunkTopY + canopyH * 0.12,
+      cx - trunkTopW * 0.52,
       trunkTopY
     );
-    mctx.moveTo(cx + trunkBottomW * 0.5, trunkBottomY);
-    mctx.bezierCurveTo(
-      cx + trunkBottomW * 0.42,
-      baseY - canopyH * 0.1,
-      cx + trunkTopW * 0.7,
-      trunkTopY + canopyH * 0.07,
-      cx + trunkTopW * 0.35,
+    mctx.quadraticCurveTo(
+      cx - trunkTopW * 0.06,
+      trunkTopY - canopyH * 0.02,
+      cx,
+      trunkTopY - canopyH * 0.015
+    );
+    mctx.quadraticCurveTo(
+      cx + trunkTopW * 0.06,
+      trunkTopY - canopyH * 0.02,
+      cx + trunkTopW * 0.52,
       trunkTopY
     );
-    mctx.stroke();
+    mctx.bezierCurveTo(
+      cx + trunkTopW * 0.95,
+      trunkTopY + canopyH * 0.12,
+      cx + trunkBottomW * 0.5,
+      baseY - canopyH * 0.06,
+      cx + trunkBottomW * 0.58,
+      trunkBottomY
+    );
+    mctx.closePath();
+    mctx.fill();
 
     function branch(x, y, len, angle, width, depth) {
-      if (depth <= 0 || len < 1.2 || width < 0.28) return;
+      if (depth <= 0 || len < 0.95 || width < 0.12) return;
 
-      const bend = (rand() - 0.5) * 0.72;
+      const bend = (rand() - 0.5) * 0.96;
       const heading = angle + bend * 0.5;
       const x2 = x + Math.cos(heading) * len;
       const y2 = y + Math.sin(heading) * len;
       const normal = heading + Math.PI / 2;
-      const c1Amp = len * (0.24 + rand() * 0.14) * (rand() < 0.5 ? -1 : 1);
-      const c2Amp = len * (0.2 + rand() * 0.16) * (rand() < 0.5 ? -1 : 1);
+      const c1Amp = len * (0.28 + rand() * 0.2) * (rand() < 0.5 ? -1 : 1);
+      const c2Amp = len * (0.24 + rand() * 0.22) * (rand() < 0.5 ? -1 : 1);
       const c1x = x + Math.cos(heading) * len * 0.33 + Math.cos(normal) * c1Amp;
       const c1y = y + Math.sin(heading) * len * 0.33 + Math.sin(normal) * c1Amp;
       const c2x = x + Math.cos(heading) * len * 0.72 + Math.cos(normal) * c2Amp;
       const c2y = y + Math.sin(heading) * len * 0.72 + Math.sin(normal) * c2Amp;
 
-      mctx.lineWidth = width;
+      mctx.lineWidth = Math.max(0.45, width);
       mctx.beginPath();
       mctx.moveTo(x, y);
       mctx.bezierCurveTo(c1x, c1y, c2x, c2y, x2, y2);
@@ -254,13 +266,13 @@
 
       const trunkZoneTop = baseY - canopyH * 1.22;
       const trunkZoneBottom = baseY + canopyH * 0.04;
-      if (y2 < trunkZoneTop || y2 > trunkZoneBottom || x2 < cx - canopyW * 0.56 || x2 > cx + canopyW * 0.56) {
+      if (y2 < trunkZoneTop || y2 > trunkZoneBottom || x2 < cx - canopyW * 0.62 || x2 > cx + canopyW * 0.62) {
         return;
       }
 
-      const nextLen = len * (0.73 + rand() * 0.08);
-      const nextWidth = width * (0.68 + rand() * 0.06);
-      const spread = 0.18 + rand() * 0.22;
+      const nextLen = len * (0.76 + rand() * 0.09);
+      const nextWidth = width * (0.56 + rand() * 0.08);
+      const spread = 0.14 + rand() * 0.2;
 
       branch(x2, y2, nextLen, heading - spread, nextWidth, depth - 1);
       branch(x2, y2, nextLen * (0.98 + rand() * 0.06), heading + spread, nextWidth, depth - 1);
@@ -268,13 +280,13 @@
 
     // Primary limbs with wider horizontal spread.
     const roots = [
-      { x: cx - trunkTopW * 0.8, y: trunkTopY + 1.4, a: -2.58, l: canopyW * 0.26, w: canopyW * 0.016, d: 8 },
-      { x: cx - trunkTopW * 0.5, y: trunkTopY + 0.8, a: -2.18, l: canopyW * 0.29, w: canopyW * 0.017, d: 8 },
-      { x: cx - trunkTopW * 0.2, y: trunkTopY + 0.3, a: -1.88, l: canopyW * 0.31, w: canopyW * 0.017, d: 8 },
-      { x: cx, y: trunkTopY - 0.2, a: -1.57, l: canopyW * 0.33, w: canopyW * 0.018, d: 9 },
-      { x: cx + trunkTopW * 0.2, y: trunkTopY + 0.3, a: -1.26, l: canopyW * 0.31, w: canopyW * 0.017, d: 8 },
-      { x: cx + trunkTopW * 0.5, y: trunkTopY + 0.8, a: -0.96, l: canopyW * 0.29, w: canopyW * 0.017, d: 8 },
-      { x: cx + trunkTopW * 0.8, y: trunkTopY + 1.4, a: -0.56, l: canopyW * 0.26, w: canopyW * 0.016, d: 8 }
+      { x: cx - trunkTopW * 0.9, y: trunkTopY + 1.4, a: -2.62, l: canopyW * 0.29, w: canopyW * 0.012, d: 9 },
+      { x: cx - trunkTopW * 0.56, y: trunkTopY + 0.9, a: -2.2, l: canopyW * 0.33, w: canopyW * 0.013, d: 9 },
+      { x: cx - trunkTopW * 0.22, y: trunkTopY + 0.35, a: -1.9, l: canopyW * 0.35, w: canopyW * 0.013, d: 9 },
+      { x: cx, y: trunkTopY - 0.2, a: -1.57, l: canopyW * 0.38, w: canopyW * 0.014, d: 10 },
+      { x: cx + trunkTopW * 0.22, y: trunkTopY + 0.35, a: -1.24, l: canopyW * 0.35, w: canopyW * 0.013, d: 9 },
+      { x: cx + trunkTopW * 0.56, y: trunkTopY + 0.9, a: -0.94, l: canopyW * 0.33, w: canopyW * 0.013, d: 9 },
+      { x: cx + trunkTopW * 0.9, y: trunkTopY + 1.4, a: -0.52, l: canopyW * 0.29, w: canopyW * 0.012, d: 9 }
     ];
 
     for (const r of roots) {
@@ -282,8 +294,8 @@
     }
 
     // Lower snaky limbs.
-    branch(cx - trunkTopW * 0.62, trunkTopY + canopyH * 0.11, canopyW * 0.2, -2.84, canopyW * 0.013, 6);
-    branch(cx + trunkTopW * 0.62, trunkTopY + canopyH * 0.11, canopyW * 0.2, -0.3, canopyW * 0.013, 6);
+    branch(cx - trunkTopW * 0.66, trunkTopY + canopyH * 0.12, canopyW * 0.24, -2.9, canopyW * 0.01, 7);
+    branch(cx + trunkTopW * 0.66, trunkTopY + canopyH * 0.12, canopyW * 0.24, -0.26, canopyW * 0.01, 7);
   }
 
   function rebuildTreeMask() {
@@ -334,10 +346,13 @@
     if (proceduralTreeMeta) {
       const { cx, trunkTopY, trunkBottomY, trunkTopW, trunkBottomW } = proceduralTreeMeta;
       for (let y = 0; y < rows; y++) {
-        if (y < trunkTopY - 1 || y > trunkBottomY + 1) continue;
+        if (y < trunkTopY - 2 || y > trunkBottomY + 1) continue;
         const t = (y - trunkTopY) / Math.max(1, trunkBottomY - trunkTopY);
         const clamped = Math.max(0, Math.min(1, t));
-        const halfW = (trunkTopW * 0.38 + (trunkBottomW * 0.56 - trunkTopW * 0.38) * clamped) + 0.9;
+        let halfW = trunkTopW * 0.6 + (trunkBottomW * 0.62 - trunkTopW * 0.6) * Math.pow(clamped, 1.45) + 0.7;
+        if (clamped > 0.72) {
+          halfW += (clamped - 0.72) * 6.5;
+        }
         for (let x = 0; x < cols; x++) {
           if (Math.abs(x - cx) <= halfW) {
             const i = y * cols + x;
