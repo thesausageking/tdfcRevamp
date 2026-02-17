@@ -186,9 +186,9 @@
 
   function drawProceduralTreeMask(mctx, w, h) {
     const cx = w * 0.5;
-    // Lower tree so the stump sits closer to the footer band.
-    const baseY = h * 0.84;
-    const canopyW = w * 0.66;
+    // Drop trunk by ~2cm equivalent (about 5.5 tile rows at 14px tiles).
+    const baseY = Math.min(h * 0.84 + 5.5, h - 2.5);
+    const canopyW = w * 0.76;
     const canopyH = h * 0.52;
 
     mctx.clearRect(0, 0, w, h);
@@ -196,14 +196,8 @@
     mctx.lineCap = "round";
     mctx.lineJoin = "round";
 
-    let seed = 246813579;
-    function rand() {
-      seed = (seed * 1664525 + 1013904223) >>> 0;
-      return seed / 4294967296;
-    }
-
     // Solid trunk with stronger flare at the base.
-    const trunkTopY = baseY - canopyH * 0.34;
+    const trunkTopY = baseY - canopyH * 0.32;
     const trunkBottomY = baseY;
     const trunkTopW = canopyW * 0.034;
     const trunkBottomW = canopyW * 0.13;
@@ -243,59 +237,132 @@
     mctx.closePath();
     mctx.fill();
 
-    function branch(x, y, len, angle, width, depth) {
-      if (depth <= 0 || len < 0.95 || width < 0.12) return;
+    // Deterministic pseudo-randomness so shape is organic but stable.
+    let seed = 924137;
+    function rand() {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 4294967296;
+    }
 
-      const bend = (rand() - 0.5) * 0.96;
-      const heading = angle + bend * 0.5;
-      const x2 = x + Math.cos(heading) * len;
-      const y2 = y + Math.sin(heading) * len;
-      const normal = heading + Math.PI / 2;
-      const c1Amp = len * (0.28 + rand() * 0.2) * (rand() < 0.5 ? -1 : 1);
-      const c2Amp = len * (0.24 + rand() * 0.22) * (rand() < 0.5 ? -1 : 1);
-      const c1x = x + Math.cos(heading) * len * 0.33 + Math.cos(normal) * c1Amp;
-      const c1y = y + Math.sin(heading) * len * 0.33 + Math.sin(normal) * c1Amp;
-      const c2x = x + Math.cos(heading) * len * 0.72 + Math.cos(normal) * c2Amp;
-      const c2y = y + Math.sin(heading) * len * 0.72 + Math.sin(normal) * c2Amp;
+    // Gentle semicircle guide for outer branch tips.
+    const edgeArcCy = baseY - canopyH * 0.45;
+    const edgeArcRx = canopyW * 0.74;
+    const edgeArcRy = canopyH * 0.48;
+    function edgeArcY(xp) {
+      const dx = (xp - cx) / edgeArcRx;
+      const t = Math.max(0, 1 - dx * dx);
+      return edgeArcCy - edgeArcRy * Math.sqrt(t);
+    }
 
-      mctx.lineWidth = Math.max(0.45, width);
+    function branch(x, y, len, angle, width, depth, bias) {
+      if (depth <= 0 || len < 0.82 || width < 0.07) return;
+
+      const heading = angle + (rand() - 0.5) * 0.36 + bias * 0.07;
+      let x2 = x + Math.cos(heading) * len;
+      let y2 = y + Math.sin(heading) * len;
+
+      // Only outer tips are gently pulled to a semicircle.
+      if (Math.abs(bias) === 1 && depth <= 2) {
+        const semiY = edgeArcY(x2) + (depth === 1 ? 0.22 : 0.4);
+        const pull = depth === 1 ? 0.62 : 0.45;
+        y2 = y2 * (1 - pull) + semiY * pull;
+      }
+
+      const segAngle = Math.atan2(y2 - y, x2 - x);
+      const normal = segAngle + Math.PI / 2;
+      const curveDirBase = bias === 0 ? (rand() < 0.5 ? -1 : 1) : bias;
+      const curveDir = curveDirBase * (bias !== 0 && depth % 2 === 1 ? -0.55 : 1);
+      const curve1 = len * (0.16 + rand() * 0.2) * curveDir;
+      const curve2 = len * (0.12 + rand() * 0.22) * curveDir;
+      const c1x = x + Math.cos(segAngle) * len * 0.33 + Math.cos(normal) * curve1;
+      const c1y = y + Math.sin(segAngle) * len * 0.33 + Math.sin(normal) * curve1;
+      const c2x = x + Math.cos(segAngle) * len * 0.72 + Math.cos(normal) * curve2;
+      const c2y = y + Math.sin(segAngle) * len * 0.72 + Math.sin(normal) * curve2;
+
+      mctx.lineWidth = Math.max(0.16, width);
       mctx.beginPath();
       mctx.moveTo(x, y);
       mctx.bezierCurveTo(c1x, c1y, c2x, c2y, x2, y2);
       mctx.stroke();
 
-      const trunkZoneTop = baseY - canopyH * 1.22;
+      const trunkZoneTop = baseY - canopyH * 1.24;
       const trunkZoneBottom = baseY + canopyH * 0.04;
-      if (y2 < trunkZoneTop || y2 > trunkZoneBottom || x2 < cx - canopyW * 0.62 || x2 > cx + canopyW * 0.62) {
+      if (y2 < trunkZoneTop || y2 > trunkZoneBottom || x2 < cx - canopyW * 0.72 || x2 > cx + canopyW * 0.72) {
         return;
       }
 
-      const nextLen = len * (0.76 + rand() * 0.09);
-      const nextWidth = width * (0.56 + rand() * 0.08);
-      const spread = 0.14 + rand() * 0.2;
+      const nextLen = len * (0.69 + rand() * 0.06);
+      const nextWidth = width * (0.48 + rand() * 0.07);
+      const spread = 0.2 + rand() * 0.24;
 
-      branch(x2, y2, nextLen, heading - spread, nextWidth, depth - 1);
-      branch(x2, y2, nextLen * (0.98 + rand() * 0.06), heading + spread, nextWidth, depth - 1);
+      // Keep the main split in two, then add selective middle twigs to fill center canopy.
+      branch(x2, y2, nextLen, segAngle - spread, nextWidth, depth - 1, -1);
+      branch(x2, y2, nextLen * (0.94 + rand() * 0.1), segAngle + spread, nextWidth, depth - 1, 1);
+
+      const centerTwigChance = bias === 0 ? 0.72 : 0.44;
+      if (depth >= 3 && depth <= 7 && rand() < centerTwigChance) {
+        branch(
+          x2,
+          y2,
+          nextLen * (0.58 + rand() * 0.1),
+          segAngle + (rand() - 0.5) * 0.12,
+          nextWidth * 0.64,
+          depth - 2,
+          bias === 0 ? (rand() < 0.5 ? -1 : 1) : 0
+        );
+      }
+
+      if (bias === 0 && depth <= 5 && depth >= 2 && rand() < 0.58) {
+        branch(
+          x2,
+          y2,
+          nextLen * (0.5 + rand() * 0.08),
+          segAngle + (rand() - 0.5) * 0.2,
+          nextWidth * 0.56,
+          depth - 1,
+          rand() < 0.5 ? -1 : 1
+        );
+      }
     }
 
-    // Primary limbs with wider horizontal spread.
-    const roots = [
-      { x: cx - trunkTopW * 0.9, y: trunkTopY + 1.4, a: -2.62, l: canopyW * 0.29, w: canopyW * 0.012, d: 9 },
-      { x: cx - trunkTopW * 0.56, y: trunkTopY + 0.9, a: -2.2, l: canopyW * 0.33, w: canopyW * 0.013, d: 9 },
-      { x: cx - trunkTopW * 0.22, y: trunkTopY + 0.35, a: -1.9, l: canopyW * 0.35, w: canopyW * 0.013, d: 9 },
-      { x: cx, y: trunkTopY - 0.2, a: -1.57, l: canopyW * 0.38, w: canopyW * 0.014, d: 10 },
-      { x: cx + trunkTopW * 0.22, y: trunkTopY + 0.35, a: -1.24, l: canopyW * 0.35, w: canopyW * 0.013, d: 9 },
-      { x: cx + trunkTopW * 0.56, y: trunkTopY + 0.9, a: -0.94, l: canopyW * 0.33, w: canopyW * 0.013, d: 9 },
-      { x: cx + trunkTopW * 0.9, y: trunkTopY + 1.4, a: -0.52, l: canopyW * 0.29, w: canopyW * 0.012, d: 9 }
+    // Build from right-side seeds and mirror exactly to the left.
+    const centerRoot = {
+      x: cx,
+      y: trunkTopY + 1.3,
+      a: -Math.PI / 2,
+      l: canopyW * 0.27,
+      w: canopyW * 0.0138,
+      d: 8,
+      b: 0
+    };
+
+    const rightRoots = [
+      { x: cx + trunkTopW * 0.08, y: trunkTopY + 1.5, a: -1.46, l: canopyW * 0.24, w: canopyW * 0.0132, d: 8, b: 0 },
+      { x: cx + trunkTopW * 0.24, y: trunkTopY + 1.8, a: -1.28, l: canopyW * 0.25, w: canopyW * 0.0128, d: 8, b: 1 },
+      { x: cx + trunkTopW * 0.56, y: trunkTopY + 2.2, a: -1.06, l: canopyW * 0.23, w: canopyW * 0.0122, d: 8, b: 1 },
+      { x: cx + trunkTopW * 0.9, y: trunkTopY + 2.6, a: -0.72, l: canopyW * 0.2, w: canopyW * 0.0118, d: 8, b: 1 },
+      { x: cx + trunkTopW * 0.72, y: trunkTopY + 2.95, a: -0.86, l: canopyW * 0.205, w: canopyW * 0.0114, d: 7, b: 1 },
+      { x: cx + trunkTopW * 1.02, y: trunkTopY + 3.15, a: -0.56, l: canopyW * 0.185, w: canopyW * 0.0111, d: 7, b: 1 }
     ];
 
-    for (const r of roots) {
-      branch(r.x, r.y, r.l, r.a, r.w, r.d);
-    }
+    // Keep center root deterministic.
+    seed = 7331;
+    branch(centerRoot.x, centerRoot.y, centerRoot.l, centerRoot.a, centerRoot.w, centerRoot.d, centerRoot.b);
 
-    // Lower snaky limbs.
-    branch(cx - trunkTopW * 0.66, trunkTopY + canopyH * 0.12, canopyW * 0.24, -2.9, canopyW * 0.01, 7);
-    branch(cx + trunkTopW * 0.66, trunkTopY + canopyH * 0.12, canopyW * 0.24, -0.26, canopyW * 0.01, 7);
+    // Replay identical RNG for each mirrored pair.
+    rightRoots.forEach((r, idx) => {
+      const rootSeed = 11027 + idx * 977;
+
+      seed = rootSeed;
+      branch(r.x, r.y, r.l, r.a, r.w, r.d, r.b);
+
+      const mx = cx - (r.x - cx);
+      const ma = Math.PI - r.a;
+      const mb = r.b === 0 ? 0 : -r.b;
+
+      seed = rootSeed;
+      branch(mx, r.y, r.l, ma, r.w, r.d, mb);
+    });
   }
 
   function rebuildTreeMask() {
