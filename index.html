@@ -3,44 +3,36 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TDFC Transaction Board</title>
+    <title>TDFC Transaction Cube Board</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=VT323&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=VT323&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <canvas id="txBoard" aria-hidden="true"></canvas>
-    <div class="board-wash" aria-hidden="true"></div>
+    <canvas id="cubeBoard" aria-hidden="true"></canvas>
 
-    <main class="content-layer">
-      <section class="left-panel">
-        <div class="brand-lockup">
-          <img src="./assets/logo.png" alt="The Digital Finance Company logo" class="logo" />
-          <h1>The Digital Finance Company</h1>
-        </div>
-        <a class="contact-link" href="#">Contact</a>
-      </section>
+    <header class="top-strip">
+      <div class="brand">The Digital Finance Company</div>
+    </header>
 
-      <section class="right-panel">
-        <div class="meta">
-          <p class="label">established</p>
-          <h2>2025 New York, New York</h2>
-        </div>
+    <section class="center-copy">
+      <p>we make</p>
+      <h1>Digital Financial Technology</h1>
+    </section>
 
-        <div class="meta">
-          <p class="label">we make</p>
-          <h2>Digital Financial Technology</h2>
-        </div>
-      </section>
-    </main>
+    <footer class="bottom-strip">
+      <a class="contact-btn" href="mailto:hello@tdfc.com">Contact</a>
+      <div class="established">
+        <span>established</span>
+        <strong>2025 New York</strong>
+      </div>
+    </footer>
 
     <script>
-      // Optional: set your key here for live Etherscan data.
-      // Leave blank and it will use mock transaction IDs.
       window.ETHERSCAN_API_KEY = "";
     </script>
     <script src="script.js"></script>

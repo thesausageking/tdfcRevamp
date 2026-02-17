@@ -1,56 +1,75 @@
 (() => {
-  const canvas = document.getElementById("txBoard");
+  const canvas = document.getElementById("cubeBoard");
   const ctx = canvas.getContext("2d", { alpha: true });
 
   const ETHERSCAN_API_KEY = (window.ETHERSCAN_API_KEY || "").trim();
-  const HEX_CHARS = "0123456789abcdef";
+  const HEX = "0123456789abcdef";
 
   const state = {
     dpr: Math.min(window.devicePixelRatio || 1, 2),
     width: 0,
     height: 0,
-    tile: 18, // about ~0.5cm visual scale on many displays
+    tile: 20, // ~0.5 cm-ish visual size on common screens
     cols: 0,
     rows: 0,
-    tiles: [],
     stream: "",
-    streamShift: 0,
+    cycle: 0,
+    tiles: [],
     lastTs: performance.now(),
   };
 
-  function randomHexId() {
+  function randomTxId() {
     let out = "0x";
-    for (let i = 0; i < 64; i += 1) {
-      out += HEX_CHARS[Math.floor(Math.random() * HEX_CHARS.length)];
-    }
+    for (let i = 0; i < 64; i += 1) out += HEX[Math.floor(Math.random() * HEX.length)];
     return out;
   }
 
-  function generateMockTransactions(count = 200) {
-    const txs = [];
-    for (let i = 0; i < count; i += 1) txs.push(randomHexId());
-    return txs;
+  function mockTransactions(count = 320) {
+    return Array.from({ length: count }, () => randomTxId());
   }
 
   function toStream(transactions) {
-    if (!transactions.length) return generateMockTransactions(120).join(" ");
-    return transactions.map((tx) => tx.toLowerCase()).join(" ");
+    if (!transactions.length) return mockTransactions(180).map((t) => t.slice(2)).join("");
+    return transactions.map((t) => t.slice(2).toLowerCase()).join("");
   }
 
-  function charAtStream(index) {
-    if (!state.stream || state.stream.length === 0) return ".";
-    return state.stream[(index + state.streamShift) % state.stream.length];
+  function streamCharAt(index) {
+    if (!state.stream.length) return ".";
+    return state.stream[index % state.stream.length];
+  }
+
+  function clamp(v, min, max) {
+    return Math.max(min, Math.min(max, v));
+  }
+
+  function easeInOutCubic(t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+
+  function buildGrid() {
+    const total = state.cols * state.rows;
+    state.tiles = Array.from({ length: total }, (_, i) => ({
+      i,
+      row: Math.floor(i / state.cols),
+      col: i % state.cols,
+      char: streamCharAt(i * 7),
+      nextChar: streamCharAt(i * 7 + 1),
+      p: 1,
+      delay: 0,
+      duration: 2.2 + Math.random() * 2.4, // long flip window
+      flipping: false,
+      swapped: false,
+      shadeJitter: Math.random() * 8 - 4,
+    }));
   }
 
   function resize() {
     state.width = window.innerWidth;
     state.height = window.innerHeight;
+    state.tile = state.width > 1700 ? 22 : state.width > 1300 ? 21 : state.width > 1000 ? 20 : 18;
 
-    state.tile =
-      state.width > 1700 ? 20 : state.width > 1300 ? 19 : state.width > 1000 ? 18 : 16;
-
-    state.cols = Math.ceil(state.width / state.tile);
-    state.rows = Math.ceil(state.height / state.tile);
+    state.cols = Math.ceil(state.width / state.tile) + 1;
+    state.rows = Math.ceil(state.height / state.tile) + 1;
 
     canvas.width = Math.floor(state.width * state.dpr);
     canvas.height = Math.floor(state.height * state.dpr);
@@ -60,226 +79,186 @@
     ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
 
-    const total = state.cols * state.rows;
-    const nextTiles = [];
-
-    for (let i = 0; i < total; i += 1) {
-      const prev = state.tiles[i];
-      nextTiles.push(
-        prev || {
-          char: charAtStream(i),
-          fromChar: ".",
-          targetChar: ".",
-          flip: 0,
-          flipping: false,
-          delay: 0,
-          speed: 2.4 + Math.random() * 1.8,
-          shadeBias: Math.random() * 10 - 5,
-          tint: 0,
-          changed: false,
-        }
-      );
-    }
-
-    state.tiles = nextTiles;
+    buildGrid();
   }
 
-  async function fetchLatestTransactions(limit = 180) {
-    if (!ETHERSCAN_API_KEY) throw new Error("No Etherscan key");
+  function queueGlobalFlip() {
+    state.cycle += 1;
+    const shift = (state.cycle * 131) % Math.max(state.stream.length, 1);
+
+    for (let i = 0; i < state.tiles.length; i += 1) {
+      const t = state.tiles[i];
+      t.nextChar = streamCharAt(t.i * 11 + shift);
+
+      t.p = 0;
+      // all flip together, but with subtle spread for the "bit by bit reveal"
+      t.delay = t.row * 0.004 + t.col * 0.0012 + Math.random() * 0.4;
+      t.duration = 2.1 + Math.random() * 2.8;
+      t.flipping = true;
+      t.swapped = false;
+    }
+  }
+
+  function update(dt) {
+    for (let i = 0; i < state.tiles.length; i += 1) {
+      const t = state.tiles[i];
+      if (!t.flipping) continue;
+
+      if (t.delay > 0) {
+        t.delay -= dt;
+        continue;
+      }
+
+      t.p = Math.min(1, t.p + dt / t.duration);
+
+      if (!t.swapped && t.p >= 0.54) {
+        t.char = t.nextChar;
+        t.swapped = true;
+      }
+
+      if (t.p >= 1) {
+        t.flipping = false;
+        t.swapped = false;
+      }
+    }
+  }
+
+  function drawTile(tile) {
+    const s = state.tile;
+    const x = tile.col * s;
+    const y = tile.row * s;
+
+    const base = clamp(177 + tile.shadeJitter, 138, 230);
+
+    // flat board tile base
+    const topGray = clamp(base + 12, 145, 242);
+    const bottomGray = clamp(base - 8, 120, 232);
+
+    let faceX = x;
+    let faceY = y;
+    let faceW = s;
+    let faceH = s;
+    let visibleChar = tile.char;
+
+    if (tile.flipping) {
+      const e = easeInOutCubic(tile.p);
+      const angle = e * Math.PI; // 0..180deg
+      const sx = Math.max(0.06, Math.abs(Math.cos(angle)));
+      const lift = Math.sin(e * Math.PI) * (s * 0.36); // pop up during flip
+      const depth = Math.sin(e * Math.PI) * (s * 0.22);
+
+      faceW = s * sx;
+      faceX = x + (s - faceW) * 0.5;
+      faceY = y - lift;
+      visibleChar = angle < Math.PI * 0.5 ? tile.char : tile.nextChar;
+
+      // pseudo cube side while flipping (3D only during rotation)
+      if (depth > 0.6) {
+        const sideShade = clamp(base - 30, 95, 210);
+        const sideW = Math.max(1, depth);
+        const sideX = angle < Math.PI * 0.5 ? faceX + faceW : faceX - sideW;
+        ctx.fillStyle = `rgb(${sideShade}, ${sideShade}, ${sideShade})`;
+        ctx.fillRect(sideX, faceY + 1, sideW, s - 2);
+      }
+    }
+
+    // face split
+    const half = faceH * 0.5;
+    ctx.fillStyle = `rgb(${topGray}, ${topGray}, ${topGray})`;
+    ctx.fillRect(faceX, faceY, faceW, half);
+
+    ctx.fillStyle = `rgb(${bottomGray}, ${bottomGray}, ${bottomGray})`;
+    ctx.fillRect(faceX, faceY + half, faceW, half);
+
+    // tile border + seam
+    ctx.strokeStyle = "rgba(12, 20, 30, 0.16)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(faceX + 0.5, faceY + 0.5, Math.max(1, faceW - 1), faceH - 1);
+
+    ctx.strokeStyle = "rgba(12, 20, 30, 0.2)";
+    ctx.beginPath();
+    ctx.moveTo(faceX + 1, faceY + half + 0.5);
+    ctx.lineTo(faceX + faceW - 1, faceY + half + 0.5);
+    ctx.stroke();
+
+    // pixel-ish character
+    ctx.fillStyle = "rgba(20, 30, 42, 0.95)";
+    ctx.font = `${Math.max(11, Math.floor(s * 0.72))}px "VT323", monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(visibleChar, faceX + faceW * 0.5, faceY + s * 0.58);
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, state.width, state.height);
+    for (let i = 0; i < state.tiles.length; i += 1) drawTile(state.tiles[i]);
+  }
+
+  async function fetchLatestTransactions(limit = 280) {
+    if (!ETHERSCAN_API_KEY) throw new Error("No API key");
 
     const base = "https://api.etherscan.io/v2/api";
 
     const latestResp = await fetch(
       `${base}?chainid=1&module=proxy&action=eth_blockNumber&apikey=${ETHERSCAN_API_KEY}`
     );
-    if (!latestResp.ok) throw new Error("Failed latest block fetch");
+    if (!latestResp.ok) throw new Error("latest block fetch failed");
 
     const latestJson = await latestResp.json();
-    const latestHex = latestJson?.result;
-    if (!latestHex) throw new Error("No latest block result");
+    const latest = Number.parseInt(latestJson?.result, 16);
+    if (!Number.isFinite(latest)) throw new Error("invalid latest block");
 
-    const latest = Number.parseInt(latestHex, 16);
-    if (!Number.isFinite(latest)) throw new Error("Invalid latest block");
-
-    const out = [];
-
-    for (let b = latest; b >= latest - 10 && out.length < limit; b -= 1) {
+    const txs = [];
+    for (let b = latest; b >= latest - 14 && txs.length < limit; b -= 1) {
       const tag = `0x${b.toString(16)}`;
       const blockResp = await fetch(
         `${base}?chainid=1&module=proxy&action=eth_getBlockByNumber&tag=${tag}&boolean=false&apikey=${ETHERSCAN_API_KEY}`
       );
       if (!blockResp.ok) continue;
-
       const blockJson = await blockResp.json();
-      const txs = blockJson?.result?.transactions;
-      if (Array.isArray(txs)) {
-        for (let i = 0; i < txs.length && out.length < limit; i += 1) {
-          if (typeof txs[i] === "string" && txs[i].startsWith("0x")) out.push(txs[i]);
-        }
+      const list = blockJson?.result?.transactions;
+      if (!Array.isArray(list)) continue;
+
+      for (let i = 0; i < list.length && txs.length < limit; i += 1) {
+        const v = list[i];
+        if (typeof v === "string" && v.startsWith("0x")) txs.push(v);
       }
     }
 
-    if (!out.length) throw new Error("No tx data");
-    return out;
+    if (!txs.length) throw new Error("no tx data");
+    return txs;
   }
 
-  function queueBoardUpdate() {
-    state.streamShift = (state.streamShift + 17) % Math.max(state.stream.length, 1);
-
-    for (let i = 0; i < state.tiles.length; i += 1) {
-      const tile = state.tiles[i];
-      const nextChar = charAtStream(i);
-
-      if (tile.char === nextChar) continue;
-
-      tile.fromChar = tile.char;
-      tile.targetChar = nextChar;
-      tile.flip = 0;
-      tile.flipping = false;
-      tile.changed = true;
-
-      const row = Math.floor(i / state.cols);
-      const col = i % state.cols;
-      tile.delay = row * 0.006 + col * 0.0015 + Math.random() * 0.6;
-      tile.tint = 1;
-    }
-  }
-
-  function triggerTickerWave() {
-    if (!state.tiles.length || !state.stream) return;
-
-    const targetRow = Math.floor(Math.random() * state.rows);
-    const baseShift = Math.floor(Math.random() * 50);
-
-    for (let col = 0; col < state.cols; col += 1) {
-      const idx = targetRow * state.cols + col;
-      const tile = state.tiles[idx];
-      if (!tile) continue;
-
-      const nextChar = state.stream[(idx + state.streamShift + baseShift) % state.stream.length];
-      if (!nextChar || nextChar === tile.char) continue;
-
-      tile.fromChar = tile.char;
-      tile.targetChar = nextChar;
-      tile.flip = 0;
-      tile.flipping = false;
-      tile.changed = true;
-      tile.delay = col * 0.01 + Math.random() * 0.08;
-      tile.tint = 1;
-    }
-  }
-
-  function update(dt) {
-    for (let i = 0; i < state.tiles.length; i += 1) {
-      const tile = state.tiles[i];
-
-      tile.tint *= 0.92;
-
-      if (!tile.changed) continue;
-
-      if (tile.delay > 0) {
-        tile.delay -= dt;
-        continue;
-      }
-
-      if (!tile.flipping) {
-        tile.flipping = true;
-      }
-
-      tile.flip += dt * tile.speed;
-
-      if (tile.flip >= 0.5 && tile.char !== tile.targetChar) {
-        tile.char = tile.targetChar;
-      }
-
-      if (tile.flip >= 1) {
-        tile.flip = 0;
-        tile.flipping = false;
-        tile.changed = false;
-      }
-    }
-  }
-
-  function drawTile(x, y, tile) {
-    const s = state.tile;
-    const half = s * 0.5;
-
-    const base = 226 + tile.shadeBias + tile.tint * 8;
-    const topGray = Math.max(178, Math.min(246, base + 6));
-    const botGray = Math.max(165, Math.min(238, base - 7));
-
-    ctx.fillStyle = `rgb(${topGray}, ${topGray}, ${topGray})`;
-    ctx.fillRect(x, y, s, half);
-
-    ctx.fillStyle = `rgb(${botGray}, ${botGray}, ${botGray})`;
-    ctx.fillRect(x, y + half, s, half);
-
-    ctx.strokeStyle = "rgba(0,0,0,0.08)";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 0.5, y + 0.5, s - 1, s - 1);
-
-    ctx.strokeStyle = "rgba(0,0,0,0.16)";
-    ctx.beginPath();
-    ctx.moveTo(x + 1, y + half + 0.5);
-    ctx.lineTo(x + s - 1, y + half + 0.5);
-    ctx.stroke();
-
-    const shown = tile.flipping && tile.flip < 0.5 ? tile.fromChar : tile.targetChar || tile.char;
-    const scaleY = tile.flipping ? Math.max(0.08, Math.abs(Math.cos(tile.flip * Math.PI))) : 1;
-
-    ctx.save();
-    ctx.translate(x + s * 0.5, y + s * 0.58);
-    ctx.scale(1, scaleY);
-    ctx.fillStyle = "#1f2833";
-    ctx.font = `${Math.floor(s * 0.74)}px "VT323", monospace`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(shown, 0, 0);
-    ctx.restore();
-  }
-
-  function render() {
-    ctx.clearRect(0, 0, state.width, state.height);
-
-    for (let row = 0; row < state.rows; row += 1) {
-      for (let col = 0; col < state.cols; col += 1) {
-        const idx = row * state.cols + col;
-        drawTile(col * state.tile, row * state.tile, state.tiles[idx]);
-      }
-    }
-  }
-
-  async function refreshTransactions() {
+  async function refreshBoardData() {
     let txs = [];
     try {
-      txs = await fetchLatestTransactions(220);
+      txs = await fetchLatestTransactions(320);
     } catch {
-      txs = generateMockTransactions(220);
+      txs = mockTransactions(320);
     }
 
     state.stream = toStream(txs);
-    queueBoardUpdate();
+    queueGlobalFlip();
   }
 
-  function loop(ts) {
-    const dt = Math.min((ts - state.lastTs) / 1000, 0.05);
-    state.lastTs = ts;
+  function tick(now) {
+    const dt = Math.min((now - state.lastTs) / 1000, 0.05);
+    state.lastTs = now;
 
     update(dt);
     render();
 
-    requestAnimationFrame(loop);
+    requestAnimationFrame(tick);
   }
 
   window.addEventListener("resize", resize);
 
+  state.stream = toStream(mockTransactions(320));
   resize();
-  state.stream = toStream(generateMockTransactions(220));
-  queueBoardUpdate();
+  queueGlobalFlip();
 
-  refreshTransactions();
-  setInterval(refreshTransactions, 30_000);
-  setInterval(triggerTickerWave, 3_500);
+  refreshBoardData();
+  setInterval(refreshBoardData, 30_000);
 
-  requestAnimationFrame(loop);
+  requestAnimationFrame(tick);
 })();
